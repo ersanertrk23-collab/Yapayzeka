@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş / Çıkış Destekli Stok Takibi</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* Özet Kartları */
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center; }
+        .card h3 { margin: 0 0 5px 0; font-size: 14px; color: #666; }
+        .card p { margin: 0; font-size: 20px; font-weight: bold; color: #2c3e50; }
+
+        /* Panel ve Formlar */
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h2 { margin-top: 0; color: #2c3e50; font-size: 18px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 15px; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 5px; outline: none; width: 100%; }
+        
+        /* Butonlar */
+        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
+        .btn-add { background-color: #2ecee0; }
+        .btn-in { background-color: #2ecc71; }
+        .btn-out { background-color: #e67e22; }
+        .btn-delete { background-color: #e74c3c; padding: 5px 10px; font-size: 12px; }
+
+        /* Tablolar */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #34495e; color: white; }
+        
+        /* Hareket Rozetleri */
+        .badge-in { background-color: #d4edda; color: #155724; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+        .badge-out { background-color: #f8d7da; color: #721c24; padding: 3px 8px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- 📊 ÖZET PANOLARI -->
+    <div class="cards">
+        <div class="card">
+            <h3>Toplam Ürün Çeşidi</h3>
+            <p id="ozetCesit">0</p>
+        </div>
+        <div class="card">
+            <h3>Toplam Stok Adedi</h3>
+            <p id="ozetAdet">0</p>
+        </div>
+        <div class="card">
+            <h3>Toplam Stok Değeri</h3>
+            <p id="ozetDeger">0.00 TL</p>
+        </div>
+    </div>
+
+    <!-- 1️⃣ YENİ ÜRÜN TANIMLAMA -->
+    <div class="panel">
+        <h2>➕ Yeni Ürün Tanımla</h2>
+        <div class="form-grid">
+            <input type="text" id="yeniKod" placeholder="Ürün Kodu">
+            <input type="text" id="yeniAd" placeholder="Ürün Adı">
+            <input type="number" id="yeniFiyat" placeholder="Birim Fiyat (TL)" step="0.01">
+            <input type="number" id="yeniStok" placeholder="Başlangıç Stoğu" value="0">
+            <button class="btn-add" style="background:#3498db" onclick="urunTanimla()">Ürünü Kaydet</button>
+        </div>
+    </div>
+
+    <!-- 2️⃣ STOK GİRİŞ / ÇIKIŞ İŞLEMİ -->
+    <div class="panel">
+        <h2>🔄 Stok Giriş / Çıkış İşlemi</h2>
+        <div class="form-grid">
+            <select id="islemUrunSelect">
+                <option value="">-- Ürün Seçin --</option>
+            </select>
+            <input type="number" id="islemMiktar" placeholder="Miktar" min="1">
+            <input type="text" id="islemAciklama" placeholder="Açıklama (Örn: Fatura No, Müşteri)">
+            <button class="btn-in" onclick="stokIslemYap('GIRIS')">⬇️ Stok Girişi Yap</button>
+            <button class="btn-out" onclick="stokIslemYap('CIKIS')">⬆️ Stok Çıkışı Yap</button>
+        </div>
+    </div>
+
+    <!-- 3️⃣ MEVCUT STOK DURUMU -->
+    <div class="panel">
+        <h2>📦 Mevcut Stok Listesi</h2>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Kod</th>
+                        <th>Ürün Adı</th>
+                        <th>Mevcut Stok</th>
+                        <th>Birim Fiyat</th>
+                        <th>Toplam Tutar</th>
+                        <th>İşlem</th>
+                    </tr>
+                </thead>
+                <tbody id="stokListesi"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 4️⃣ STOK HAREKET GEÇMİŞİ (LOGS) -->
+    <div class="panel">
+        <h2>📜 Stok Hareket Geçmişi (Giriş / Çıkış Kayıtları)</h2>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tarih / Saat</th>
+                        <th>Ürün Kodu</th>
+                        <th>İşlem Türü</th>
+                        <th>Miktar</th>
+                        <th>Açıklama</th>
+                    </tr>
+                </thead>
+                <tbody id="hareketListesi"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Yerel Depolama Verileri
+    let urunler = JSON.parse(localStorage.getItem('stok_urunler')) || [];
+    let hareketler = JSON.parse(localStorage.getItem('stok_hareketler')) || [];
+
+    function verileriKaydet() {
+        localStorage.setItem('stok_urunler', JSON.stringify(urunler));
+        localStorage.setItem('stok_hareketler', JSON.stringify(hareketler));
+        arayuzGuncelle();
+    }
+
+    function arayuzGuncelle() {
+        // 1. Ürün Dropdown Menüsünü Güncelle
+        const select = document.getElementById('islemUrunSelect');
+        select.innerHTML = '<option value="">-- Ürün Seçin --</option>';
+        urunler.forEach((u, index) => {
+            select.innerHTML += `<option value="${index}">${u.kod} - ${u.ad} (Mevcut: ${u.stok})</option>`;
+        });
+
+        // 2. Stok Tablosunu Güncelle ve Özeti Hesapla
+        const stokTbody = document.getElementById('stokListesi');
+        stokTbody.innerHTML = '';
+        let toplamAdet = 0;
+        let toplamDeger = 0;
+
+        urunler.forEach((u, index) => {
+            const tutar = u.stok * u.fiyat;
+            toplamAdet += u.stok;
+            toplamDeger += tutar;
+
+            stokTbody.innerHTML += `
+                <tr>
+                    <td><strong>${u.kod}</strong></td>
+                    <td>${u.ad}</td>
+                    <td><strong style="color: ${u.stok <= 5 ? 'red' : 'green'}">${u.stok}</strong></td>
+                    <td>${u.fiyat.toFixed(2)} TL</td>
+                    <td>${tutar.toFixed(2)} TL</td>
+                    <td><button class="btn-delete" onclick="urunSil(${index})">Sil</button></td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('ozetCesit').innerText = urunler.length;
+        document.getElementById('ozetAdet').innerText = toplamAdet;
+        document.getElementById('ozetDeger').innerText = toplamDeger.toFixed(2) + ' TL';
+
+        // 3. Hareket Geçmişi Tablosunu Güncelle
+        const hareketTbody = document.getElementById('hareketListesi');
+        hareketTbody.innerHTML = '';
+        
+        // En son yapılan işlemi en üstte göster
+        [...hareketler].reverse().forEach(h => {
+            const turBadge = h.tur === 'GIRIS' 
+                ? '<span class="badge-in">+ GİRİŞ</span>' 
+                : '<span class="badge-out">- ÇIKIŞ</span>';
+
+            hareketTbody.innerHTML += `
+                <tr>
+                    <td>${h.tarih}</td>
+                    <td><strong>${h.kod}</strong></td>
+                    <td>${turBadge}</td>
+                    <td><strong>${h.miktar}</strong></td>
+                    <td>${h.aciklama || '-'}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function urunTanimla() {
+        const kod = document.getElementById('yeniKod').value.trim();
+        const ad = document.getElementById('yeniAd').value.trim();
+        const fiyat = parseFloat(document.getElementById('yeniFiyat').value);
+        const stok = parseInt(document.getElementById('yeniStok').value) || 0;
+
+        if (!kod || !ad || isNaN(fiyat)) {
+            alert("Lütfen ürün kodu, adı ve fiyatını eksiksiz girin.");
+            return;
+        }
+
+        urunler.push({ kod, ad, fiyat, stok });
+        
+        if (stok > 0) {
+            hareketEkle(kod, 'GIRIS', stok, 'İlk Stok Tanımlaması');
+        }
+
+        verileriKaydet();
+        
+        document.getElementById('yeniKod').value = '';
+        document.getElementById('yeniAd').value = '';
+        document.getElementById('yeniFiyat').value = '';
+        document.getElementById('yeniStok').value = '0';
+    }
+
+    function stokIslemYap(tur) {
+        const selectIndex = document.getElementById('islemUrunSelect').value;
+        const miktar = parseInt(document.getElementById('islemMiktar').value);
+        const aciklama = document.getElementById('islemAciklama').value.trim();
+
+        if (selectIndex === "" || isNaN(miktar) || miktar <= 0) {
+            alert("Lütfen geçerli bir ürün ve miktar girin.");
+            return;
+        }
+
+        const urun = urunler[selectIndex];
+
+        if (tur === 'CIKIS' && urun.stok < miktar) {
+            alert("Yetersiz Stok! Mevcut stoktan fazla çıkış yapamazsınız.");
+            return;
+        }
+
+        if (tur === 'GIRIS') {
+            urun.stok += miktar;
+        } else {
+            urun.stok -= miktar;
+        }
+
+        hareketEkle(urun.kod, tur, miktar, aciklama);
+        verileriKaydet();
+
+        document.getElementById('islemMiktar').value = '';
+        document.getElementById('islemAciklama').value = '';
+    }
+
+    function hareketEkle(kod, tur, miktar, aciklama) {
+        const simdi = new Date();
+        const tarihStr = simdi.toLocaleDateString('tr-TR') + ' ' + simdi.toLocaleTimeString('tr-TR', {hour: '2-digit', minute:'2-digit'});
+        
+        hareketler.push({
+            tarih: tarihStr,
+            kod: kod,
+            tur: tur,
+            miktar: miktar,
+            aciklama: aciklama
+        });
+    }
+
+    function urunSil(index) {
+        if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
+            urunler.splice(index, 1);
+            verileriKaydet();
+        }
+    }
+
+    // İlk Yükleme
+    arayuzGuncelle();
+</script>
+
+</body>
+</html>
